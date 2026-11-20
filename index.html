@@ -1,0 +1,513 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Stock Allocation Scheme</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: row labels left, "Today" fixed in the middle column, the right column switches between two proposals; a simulator below follows the active proposal. */
+:root{
+  --bg:#f4f7f6; --surface:#ffffff; --surface-2:#eaf0ee; --fg:#14211f; --muted:#5a6a66; --line:#c9d6d2;
+  --now:#5a6a66; --now-soft:#eef2f1;
+  --new:#0d6a64; --new-soft:#d8eeeb; --on-new:#ffffff;
+  --direct:#2b5db0; --direct-soft:#e1eafa; --mno:#7547b0; --mno-soft:#eee6f8; --retail:#a8620c; --retail-soft:#f8ecdb;
+  --res:#0d6a64; --res-soft:#d8eeeb;
+  --bad:#b0261e; --bad-soft:#fae3e1;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e1514; --surface:#15201e; --surface-2:#1c2a27; --fg:#e3ecea; --muted:#93a5a0; --line:#2f403d;
+  --now:#93a5a0; --now-soft:#1a2523; --new:#4fc0b6; --new-soft:#163633; --on-new:#06201d;
+  --direct:#80a9f0; --direct-soft:#1a2740; --mno:#bb98ea; --mno-soft:#2a1f3b; --retail:#e4a653; --retail-soft:#3a2a14;
+  --res:#4fc0b6; --res-soft:#163633;
+  --bad:#f08b80; --bad-soft:#3d1c19; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1514; --surface:#15201e; --surface-2:#1c2a27; --fg:#e3ecea; --muted:#93a5a0; --line:#2f403d;
+  --now:#93a5a0; --now-soft:#1a2523; --new:#4fc0b6; --new-soft:#163633; --on-new:#06201d;
+  --direct:#80a9f0; --direct-soft:#1a2740; --mno:#bb98ea; --mno-soft:#2a1f3b; --retail:#e4a653; --retail-soft:#3a2a14;
+  --res:#4fc0b6; --res-soft:#163633;
+  --bad:#f08b80; --bad-soft:#3d1c19; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.4}
+.page{max-width:1180px;margin:0 auto;padding-block:20px 28px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1{font-size:24px;margin:0 0 4px;text-wrap:balance}
+h2{font-size:19px;margin:0}
+.sub{color:var(--muted);margin:0 0 16px}
+.grid{display:grid;grid-template-columns:150px 1fr 1fr;gap:0 16px;align-items:stretch}
+.hd{font-weight:700;font-size:16px;padding:8px 12px;border-radius:9px 9px 0 0;text-align:center;align-self:end}
+.hd.now{background:var(--now);color:var(--bg)}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;background:var(--new);border-radius:9px 9px 0 0;padding:5px}
+.tabs button{flex:1 1 auto;font:inherit;font-size:13px;font-weight:600;border:0;border-radius:6px;padding:6px 8px;cursor:pointer;background:transparent;color:var(--on-new);opacity:.85}
+.tabs button:hover{opacity:1;background:color-mix(in srgb,var(--on-new) 14%,transparent)}
+.tabs button[aria-selected="true"]{background:var(--surface);color:var(--new);opacity:1}
+.tabs button:focus-visible{outline:2px solid var(--on-new);outline-offset:1px}
+.tabs small{font-weight:500;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;margin-left:4px}
+.lbl{font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);align-self:center;padding:6px 0}
+.cell{border-radius:9px;padding:9px 12px;min-width:0;display:grid;gap:6px;align-content:center}
+.c-now{background:var(--surface);border:1.5px solid var(--line)}
+.c-new{background:var(--surface);border:1.5px solid var(--new)}
+.v{display:none;gap:6px;align-content:center}
+.grid[data-v="1"] .v1,.grid[data-v="2"] .v2{display:grid}
+.v.hi{background:var(--new-soft);margin:-9px -12px;padding:9px 12px;border-radius:8px}
+.arrow{text-align:center;color:var(--muted);font-size:14px;line-height:1;padding:3px 0}
+.arrow.new{color:var(--new)}
+.t{font-weight:600}
+.s{font-size:13px;color:var(--muted)}
+.tags{display:flex;flex-wrap:wrap;gap:5px}
+.tags span{font-size:12.5px;padding:2px 8px;border-radius:5px;background:var(--surface-2);border:1px solid var(--line)}
+.tags span.n{background:var(--new-soft);border:1.5px dashed var(--new);color:var(--fg);font-weight:600}
+.badge{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.06em;padding:1px 6px;border-radius:4px;background:var(--new);color:var(--on-new);vertical-align:middle;margin-left:6px}
+.f{font-family:var(--f-mono);font-size:13px;background:var(--surface-2);border-radius:6px;padding:4px 8px;justify-self:start}
+.job{border:1.5px dashed var(--new);border-radius:7px;padding:6px 8px;font-size:12.5px;background:var(--surface)}
+.job b{color:var(--new)}
+.ch{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.ch>div{border-radius:7px;padding:6px 8px;text-align:center;font-size:13px;display:grid}
+.ch b{font-family:var(--f-mono);font-size:18px}
+.d{background:var(--direct-soft);color:var(--direct)} .m{background:var(--mno-soft);color:var(--mno)} .r{background:var(--retail-soft);color:var(--retail)}
+.warn{color:var(--bad);font-weight:600;font-size:13px}
+.ok{color:var(--new);font-weight:600;font-size:13px}
+.pc{list-style:none;margin:0;padding:0;display:grid;gap:3px;font-size:13px}
+.pc li{padding-left:18px;position:relative}
+.pc li::before{position:absolute;left:0;font-weight:700}
+.pc .p::before{content:"+";color:var(--new)}
+.pc .c::before{content:"−";color:var(--bad)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;font-size:13px;color:var(--muted);align-items:center}
+.legend .tags span{font-size:12px}
+
+/* simulator */
+.sim{margin-top:28px;background:var(--surface);border:1.5px solid var(--new);border-radius:12px;padding:16px;display:grid;gap:14px}
+.sim-head{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between}
+.sim-body{display:grid;grid-template-columns:300px 1fr;gap:18px;align-items:start}
+.ctl{display:grid;gap:12px}
+.ctl label,.ctl .lb{font-size:13px;font-weight:600;display:flex;justify-content:space-between;gap:8px}
+.ctl output{font-family:var(--f-mono);color:var(--new)}
+.ctl input[type=range]{width:100%;accent-color:var(--new)}
+.ctl select{width:100%;font:inherit;font-size:14px;padding:5px 8px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
+.seg{display:flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{flex:1;font:inherit;font-size:13px;border:0;padding:5px 8px;background:var(--surface);color:var(--fg);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--new);color:var(--on-new);font-weight:600}
+.btn{font:inherit;font-size:13px;font-weight:600;border:1.5px solid var(--new);color:var(--new);background:var(--surface);border-radius:7px;padding:5px 10px;cursor:pointer}
+.btn:hover:not(:disabled){background:var(--new-soft)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.solid{background:var(--new);color:var(--on-new)}
+.btn:focus-visible,.seg button:focus-visible{outline:2px solid var(--new);outline-offset:2px}
+.hint{font-size:12px;color:var(--muted);font-weight:400}
+.dev{display:flex;flex-wrap:wrap;gap:4px}
+.dev i{width:22px;height:22px;border-radius:5px;background:var(--surface-2);border:1.5px solid var(--line);display:grid;place-items:center;font-style:normal;font-size:10px;font-weight:700;color:var(--bad)}
+.dev i.bD{background:var(--direct-soft);border-color:var(--direct)}
+.dev i.bM{background:var(--mno-soft);border-color:var(--mno)}
+.dev i.bR{background:var(--retail-soft);border-color:var(--retail)}
+.dev i.bX{background:var(--res-soft);border-color:var(--res);border-style:dashed}
+.dkey{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--muted);align-items:center}
+.dkey i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:4px;border:1.5px solid var(--line);background:var(--surface-2)}
+.stats{display:flex;flex-wrap:wrap;gap:8px}
+.stat{background:var(--surface-2);border-radius:8px;padding:6px 10px;font-size:12.5px;color:var(--muted)}
+.stat b{display:block;font-family:var(--f-mono);font-size:17px;color:var(--fg)}
+.stat.alert b{color:var(--bad)}
+table.cus{width:100%;border-collapse:collapse;font-size:14px}
+table.cus th{text-align:left;font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:4px 6px;border-bottom:1.5px solid var(--line)}
+table.cus td{padding:6px;border-bottom:1px solid var(--line);vertical-align:middle}
+table.cus td.num{font-family:var(--f-mono);font-size:16px;text-align:center}
+table.cus th.num{text-align:center}
+table.cus td.now{color:var(--muted)}
+.who{display:grid}
+.who small{font-size:11.5px;color:var(--muted)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
+.log{margin:0;padding:0;list-style:none;font-size:12.5px;color:var(--muted);display:grid;gap:2px;max-height:150px;overflow:auto}
+.log li:first-child{color:var(--fg)}
+.note{font-size:12.5px;color:var(--muted);background:var(--surface-2);border-radius:7px;padding:6px 10px}
+@media (max-width:760px){
+  .grid{grid-template-columns:1fr 1fr;gap:0 10px}
+  .lbl{grid-column:1/-1;padding-top:10px}
+  .lbl.empty{display:none}
+  .ch{grid-template-columns:1fr}
+  .tabs button{flex-basis:100%}
+  h1{font-size:20px}
+  .sim-body{grid-template-columns:1fr}
+  table.cus{font-size:13px}
+}
+</style>
+
+<div class="page">
+  <h1>Stock allocation between Foxway Direct and partners</h1>
+  <p class="sub">How stock is calculated today and the options for changing it. Stock is calculated separately for each customer. Direct = Foxway B2C on Back Market and Refurbed; MNO and Retail = B2B partners.</p>
+
+  <div class="grid" id="grid" data-v="1">
+    <div class="lbl empty"></div>
+    <div class="hd now">Today</div>
+    <div class="tabs" role="tablist" aria-label="Proposals">
+      <button role="tab" id="t1" data-v="1" aria-selected="true">1 · Channel shares<small>main</small></button>
+      <button role="tab" id="t2" data-v="2" aria-selected="false" tabindex="-1">2 · Channel bins</button>
+    </div>
+
+    <!-- 1 pool -->
+    <div class="lbl">Common pool</div>
+    <div class="cell c-now"><div class="t">Devices in Pick Bins</div><div class="s">minus open orders from all channels</div></div>
+    <div class="cell c-new">
+      <div class="v v1"><div class="t">No change</div><div class="s">one common pool for all channels</div></div>
+      <div class="v v2 hi"><div class="t">Split into channel bins <span class="badge">NEW</span></div><div class="s">devices go into Direct, MNO and Retail bins; in the automated warehouse these can be virtual bins, so no physical move</div></div>
+    </div>
+
+    <div class="lbl empty"></div><div class="arrow">↓</div><div class="arrow new">↓</div>
+
+    <!-- 1b reserves -->
+    <div class="lbl">Customer reserves</div>
+    <div class="cell c-now"><div class="t">Only a draft sales order</div><div class="s">exact SKU, set by hand, no refill</div></div>
+    <div class="cell c-new">
+      <div class="v v1 hi">
+        <div class="t">Reserve for a customer or channel <span class="badge">NEW</span></div>
+        <div class="tags"><span class="n">Filter: SKU, product group, model or rule</span><span class="n">Quantity</span><span class="n">Period</span><span class="n">One-off or replenishing</span><span class="n">Priority</span></div>
+        <div class="s">Set by account managers from their forecast. Other customers do not see reserved stock; a replenishing reserve refills from the pool after each purchase.</div>
+      </div>
+      <div class="v v2"><div class="t">Dedicated bin for the customer</div><div class="s">bins already support customer links; refill or a new period = moving devices</div></div>
+    </div>
+
+    <div class="lbl empty"></div><div class="arrow">↓</div><div class="arrow new">↓</div>
+
+    <!-- 2 which devices -->
+    <div class="lbl">Which devices can be sold to the customer</div>
+    <div class="cell c-now"><div class="tags"><span>Sales rules</span><span>Returns</span><span>Blocks</span></div><div class="s">also checked by the warehouse at picking</div></div>
+    <div class="cell c-new">
+      <div class="v v1"><div class="tags"><span>Sales rules</span><span>Returns</span><span>Blocks</span><span class="n">Device age</span></div><div class="s">also checked by the warehouse at picking</div></div>
+      <div class="v v2"><div class="tags"><span>Sales rules</span><span>Returns</span><span>Blocks</span><span class="n">Bin of the channel</span></div><div class="s">the warehouse picks only from the channel's bins</div></div>
+    </div>
+
+    <div class="lbl empty"></div><div class="arrow">↓</div><div class="arrow new">↓</div>
+
+    <!-- 3 how many -->
+    <div class="lbl">How many to show the customer</div>
+    <div class="cell c-now"><div class="tags"><span>Visibility cap</span></div><div class="s">partners only; Direct sees everything</div></div>
+    <div class="cell c-new">
+      <div class="v v1 hi">
+        <div class="t">Channel share by SKU category <span class="badge">NEW</span></div>
+        <div class="job"><b>Background job</b>, every 15–60 min, using rules active on the current date:<br>
+          1. customer reserves, by priority<br>
+          2. SKU parameters of the rest <span class="s">(stock quantity, stock age, whether Foxway sells this model directly, product group)</span><br>
+          → rules, for example: stock ≤ 2 or older than 90 days → Partner; Foxway sells the model → Direct; otherwise → Shared<br>
+          → channel shares, for example Shared: Direct 50 / MNO 20 / Retail 30%<br>
+          <b>Periods:</b> for example Black Friday 20.11–04.12: Direct 70 / MNO 10 / Retail 20%, then back automatically</div>
+        <div class="tags"><span>Visibility cap</span></div>
+      </div>
+      <div class="v v2"><div class="t">Everything in the channel's bins</div><div class="tags"><span>Visibility cap</span></div></div>
+    </div>
+
+    <div class="lbl empty"></div><div class="arrow">↓</div><div class="arrow new">↓</div>
+
+    <!-- 4 result -->
+    <div class="lbl">Result for the customer</div>
+    <div class="cell c-now"><div class="f">Calculated stock</div><div class="s">all channels see almost all stock</div></div>
+    <div class="cell c-new">
+      <div class="v v1"><div class="f">MIN( calculated stock − others' reserves , channel share ) + own reserve</div><div class="s">all parts are calculated from the common pool</div></div>
+      <div class="v v2"><div class="f">Calculated stock in own bins</div><div class="s">other channels' bins are invisible</div></div>
+    </div>
+
+    <div class="lbl empty"></div><div class="arrow">↓</div><div class="arrow new">↓</div>
+
+    <!-- 5 example -->
+    <div class="lbl">Example: SKU with 10 devices</div>
+    <div class="cell c-now">
+      <div class="ch"><div class="d">Direct<b>10</b></div><div class="m">MNO<b>10</b></div><div class="r">Retail<b>10</b></div></div>
+      <div class="warn">Everyone sells the same devices on the same marketplaces</div>
+    </div>
+    <div class="cell c-new">
+      <div class="v v1">
+        <div class="ch"><div class="d">Direct<b>5</b></div><div class="m">MNO<b>2</b></div><div class="r">Retail<b>3</b></div></div>
+        <div class="ok">Shared category: 50 / 20 / 30%</div>
+      </div>
+      <div class="v v2">
+        <div class="ch"><div class="d">Direct<b>5</b></div><div class="m">MNO<b>2</b></div><div class="r">Retail<b>3</b></div></div>
+        <div class="ok">5 / 2 / 3 devices placed into channel bins</div>
+      </div>
+    </div>
+
+    <div class="lbl empty"></div><div class="arrow">↓</div><div class="arrow new">↓</div>
+
+    <!-- 6 after sale -->
+    <div class="lbl">After a sale</div>
+    <div class="cell c-now"><div class="s">Reservations grow, stock is recalculated for everyone</div></div>
+    <div class="cell c-new">
+      <div class="v v1"><div class="s">Same, shares are recalculated from the new stock, and replenishing reserves refill from the pool</div></div>
+      <div class="v v2"><div class="s">Recalculated within the channel's bins; rebalancing is a bin move: system-only in the automated warehouse, physical elsewhere</div></div>
+    </div>
+
+    <div class="lbl empty"></div><div class="arrow">&nbsp;</div><div class="arrow">&nbsp;</div>
+
+    <!-- 7 trade-offs -->
+    <div class="lbl">Trade-offs</div>
+    <div class="cell c-now"><ul class="pc"><li class="c">Channel conflict and cannibalization</li></ul></div>
+    <div class="cell c-new">
+      <div class="v v1"><ul class="pc"><li class="p">Shares and Shared stock, no warehouse work</li><li class="p">Reserves, periods and refills come from recalculation</li><li class="c">The warehouse does not know the shares: counting only</li><li class="c">Changes in every stock calculation</li></ul></div>
+      <div class="v v2"><ul class="pc"><li class="p">Exact per device, visible to the warehouse</li><li class="p">Automated warehouse: virtual bins are re-sorted by a scheduled job, no physical move</li><li class="c">Manual warehouse areas: every rebalance is a physical move</li><li class="c">No percentages: a Shared bin brings the share problem back</li><li class="c">Periods and replenishing reserves mean mass moves</li></ul></div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span class="tags"><span class="n">new</span></span><span>— added in the proposal</span>
+  </div>
+
+  <!-- ============ SIMULATOR ============ -->
+  <section class="sim" aria-labelledby="simTitle">
+    <div class="sim-head">
+      <h2 id="simTitle">Simulator: <span id="simMethod">1 · Channel shares</span></h2>
+      <span class="hint">One SKU. Follows the tab above. Sell devices and watch what each customer sees.</span>
+    </div>
+    <div class="sim-body">
+      <div class="ctl">
+        <div>
+          <label for="inPool">Devices in Pick Bins <output id="oPool"></output></label>
+          <input id="inPool" type="range" min="1" max="40" value="10">
+          <div class="hint">Changing it restarts the simulation with a new delivery.</div>
+        </div>
+        <div>
+          <label for="inCat">SKU category</label>
+          <select id="inCat">
+            <option value="auto">Auto by rules: stock ≤ 2 → Partner, else Shared</option>
+            <option value="shared">Shared</option>
+            <option value="direct">Direct (Foxway sells the model)</option>
+            <option value="partner">Partner (low or old stock)</option>
+          </select>
+        </div>
+        <div>
+          <div class="lb" id="lbPeriod">Period</div>
+          <div class="seg" role="group" aria-labelledby="lbPeriod">
+            <button id="pNorm" aria-pressed="true">Normal</button>
+            <button id="pBF" aria-pressed="false">Black Friday</button>
+          </div>
+        </div>
+        <div>
+          <label for="inRes">Reserve for MNO A <output id="oRes"></output></label>
+          <input id="inRes" type="range" min="0" max="10" value="0">
+          <div class="seg" role="group" aria-label="Reserve type" style="margin-top:6px">
+            <button id="rRep" aria-pressed="true">Replenishing</button>
+            <button id="rOne" aria-pressed="false">One-off</button>
+          </div>
+        </div>
+        <div>
+          <label for="inRet">Returned by Retail B <output id="oRet"></output></label>
+          <input id="inRet" type="range" min="0" max="5" value="0">
+          <div class="hint">Personal rule: Retail B may not buy these devices.</div>
+        </div>
+        <button class="btn" id="btnReset">Restart</button>
+      </div>
+
+      <div style="display:grid;gap:12px;min-width:0">
+        <div class="stats" id="stats"></div>
+        <div>
+          <div class="dev" id="dev" aria-label="Devices in stock"></div>
+          <div class="dkey" id="dkey" style="margin-top:6px"></div>
+        </div>
+        <table class="cus">
+          <thead><tr><th>Customer</th><th class="num">Today</th><th class="num">Proposal</th><th></th></tr></thead>
+          <tbody id="cus"></tbody>
+        </table>
+        <div class="note" id="note"></div>
+        <div>
+          <div class="lb" style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Event log</div>
+          <ul class="log" id="log" aria-live="polite"></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  var grid=document.getElementById('grid');
+  var tabs=[].slice.call(document.querySelectorAll('.tabs [role="tab"]'));
+  var $=function(id){return document.getElementById(id)};
+
+  var CUSTOMERS=[
+    {id:'D', name:'Foxway Direct', sub:'Back Market, Refurbed', ch:'D', color:'var(--direct)'},
+    {id:'MA',name:'MNO A', sub:'has the reserve', ch:'M', color:'var(--mno)'},
+    {id:'MB',name:'MNO B', sub:'', ch:'M', color:'var(--mno)'},
+    {id:'RA',name:'Retail A',sub:'', ch:'R', color:'var(--retail)'},
+    {id:'RB',name:'Retail B',sub:'returned devices blocked', ch:'R', color:'var(--retail)'}
+  ];
+  var CH_NAME={D:'Direct',M:'MNO',R:'Retail'};
+
+  var S={method:'1', pool:10, cat:'auto', period:'norm', res:0, resType:'rep', ret:0,
+         m1:null, m2:null, log:[]};
+
+  function shares(n){
+    var cat=S.cat; if(cat==='auto') cat = n<=2 ? 'partner' : 'shared';
+    var p;
+    if(cat==='direct') p={D:100,M:0,R:0};
+    else if(cat==='partner') p={D:0,M:40,R:60};
+    else p = S.period==='bf' ? {D:70,M:10,R:20} : {D:50,M:20,R:30};
+    return {cat:cat, p:p};
+  }
+  // largest remainder split of n units by percentages
+  function split(n,p){
+    var keys=['D','M','R'], out={}, used=0, rem=[];
+    keys.forEach(function(k){var x=n*p[k]/100; out[k]=Math.floor(x); used+=out[k]; rem.push({k:k,f:x-out[k]});});
+    rem.sort(function(a,b){return b.f-a.f}).slice(0,n-used).forEach(function(r){out[r.k]++});
+    return out;
+  }
+  function addLog(t){S.log.unshift(t); S.log=S.log.slice(0,30);}
+
+  function reset(){
+    var n=S.pool;
+    S.m1={n:n, resLeft:S.res};
+    var devs=[]; for(var i=0;i<n;i++) devs.push({id:i, ret: i>=n-Math.min(S.ret,n)});
+    S.m2={devs:devs, resLeft:S.res, moves:0};
+    placeBins(true);
+    S.log=[]; addLog('New delivery: '+n+' devices.');
+  }
+
+  /* ---------- method 2: bins ---------- */
+  function binTargets(n){
+    var r=Math.min(S.m2.resLeft,n), sh=shares(n), q=split(n-r, sh.p);
+    return {X:r, D:q.D, M:q.M, R:q.R};
+  }
+  function binCounts(){
+    var c={X:0,D:0,M:0,R:0}; S.m2.devs.forEach(function(d){c[d.bin]++}); return c;
+  }
+  function placeBins(initial){
+    var devs=S.m2.devs, t=binTargets(devs.length);
+    if(initial){
+      var order=['X','D','M','R'], i=0;
+      order.forEach(function(b){for(var k=0;k<t[b];k++) devs[i++].bin=b;});
+      return 0;
+    }
+    var c=binCounts(), moves=0, surplus=[];
+    ['X','D','M','R'].forEach(function(b){
+      var extra=c[b]-t[b];
+      if(extra>0){var inBin=devs.filter(function(d){return d.bin===b});
+        // move returned devices out of Retail first is not done: the warehouse does not know personal rules
+        surplus=surplus.concat(inBin.slice(inBin.length-extra)); moves+=extra;}
+    });
+    ['X','D','M','R'].forEach(function(b){
+      var need=t[b]-c[b]; while(need-->0 && surplus.length){surplus.shift().bin=b;}
+    });
+    return moves;
+  }
+  function outOfBalance(){
+    var t=binTargets(S.m2.devs.length), c=binCounts(), d=0;
+    ['X','D','M','R'].forEach(function(b){if(c[b]>t[b]) d+=c[b]-t[b];});
+    return d;
+  }
+  function visible2(cid){
+    var devs=S.m2.devs;
+    function cnt(f){return devs.filter(f).length}
+    switch(cid){
+      case 'D': return cnt(function(d){return d.bin==='D'});
+      case 'MA':return cnt(function(d){return d.bin==='M'||d.bin==='X'});
+      case 'MB':return cnt(function(d){return d.bin==='M'});
+      case 'RA':return cnt(function(d){return d.bin==='R'});
+      case 'RB':return cnt(function(d){return d.bin==='R'&&!d.ret});
+    }
+  }
+  function sell2(cid){
+    var devs=S.m2.devs, pick=null, fromRes=false;
+    function find(f){for(var i=0;i<devs.length;i++) if(f(devs[i])) return i; return -1;}
+    var idx=-1;
+    if(cid==='MA'){idx=find(function(d){return d.bin==='X'}); if(idx>=0) fromRes=true; else idx=find(function(d){return d.bin==='M'});}
+    else if(cid==='RB') idx=find(function(d){return d.bin==='R'&&!d.ret});
+    else idx=find(function(d){return d.bin===CUSTOMERS.filter(function(c){return c.id===cid})[0].ch});
+    if(idx<0) return;
+    devs.splice(idx,1);
+    if(fromRes && S.resType==='one') S.m2.resLeft=Math.max(0,S.m2.resLeft-1);
+    var name=CUSTOMERS.filter(function(c){return c.id===cid})[0].name;
+    addLog(name+' bought 1'+(fromRes?' from its reserve bin':'')+'. Bins are not rebalanced automatically.');
+  }
+
+  /* ---------- method 1: counting ---------- */
+  function calc1(){
+    var n=S.m1.n, r=Math.min(S.m1.resLeft,n), sh=shares(n), q=split(n-r, sh.p), out={};
+    CUSTOMERS.forEach(function(c){
+      var allowed = c.id==='RB' ? Math.max(0,n-Math.min(S.ret,n)) : n;
+      if(c.id==='MA') out[c.id]= r + Math.min(Math.max(0,allowed-r), q.M);
+      else out[c.id]= Math.min(Math.max(0,allowed-r), q[c.ch]);
+    });
+    return {v:out, q:q, r:r, sh:sh};
+  }
+  function sell1(cid){
+    var c1=calc1(), fromRes = cid==='MA' && c1.r>0;
+    S.m1.n--;
+    if(fromRes && S.resType==='one') S.m1.resLeft=Math.max(0,S.m1.resLeft-1);
+    var name=CUSTOMERS.filter(function(c){return c.id===cid})[0].name;
+    addLog(name+' bought 1'+(fromRes?' from its reserve':'')+'. Shares recalculated'+(fromRes&&S.resType==='rep'?', reserve refilled from the pool':'')+'.');
+  }
+
+  /* ---------- render ---------- */
+  function todayView(n){
+    var o={}; CUSTOMERS.forEach(function(c){o[c.id]= c.id==='RB'? Math.max(0,n-Math.min(S.ret,n)) : n}); return o;
+  }
+  function stat(label,val,alert){return '<div class="stat'+(alert?' alert':'')+'"><b>'+val+'</b>'+label+'</div>'}
+
+  function render(){
+    $('oPool').textContent=S.pool; $('oRes').textContent=S.res; $('oRet').textContent=S.ret;
+    $('simMethod').textContent = S.method==='1' ? '1 · Channel shares' : '2 · Channel bins';
+    var vis, n, statsHtml='', devHtml='', keyHtml='', note='';
+    if(S.method==='1'){
+      var c1=calc1(); vis=c1.v; n=S.m1.n;
+      var total=0; for(var k in vis) total+=vis[k];
+      statsHtml = stat('in stock',n) + stat('category, shares D / M / R %',c1.sh.cat+' '+c1.sh.p.D+'/'+c1.sh.p.M+'/'+c1.sh.p.R) +
+        stat('reserved for MNO A',c1.r) + stat('channel shares D / M / R',c1.q.D+' / '+c1.q.M+' / '+c1.q.R) + stat('shown in total',total,total>n);
+      for(var i=0;i<n;i++){
+        var isRes=i<c1.r, isRet=i>=n-Math.min(S.ret,n);
+        devHtml+='<i class="'+(isRes?'bX':'')+'" title="'+(isRes?'counted as reserve':'common pool')+(isRet?', returned by Retail B':'')+'">'+(isRet?'R':'')+'</i>';
+      }
+      keyHtml='<span><i></i>common pool</span><span><i class="bX" style="background:var(--res-soft);border:1.5px dashed var(--res)"></i>counted as reserve (no specific device)</span><span><b style="color:var(--bad)">R</b> returned by Retail B</span>';
+      note = total>n
+        ? 'Shown in total is more than stock: MNO A and MNO B each see up to the full MNO share (the same for Retail). The share is a ceiling per partner; first come, first served.'
+        : 'Changes of category, period or reserve apply at the next background job run, no warehouse work.';
+    } else {
+      vis={}; CUSTOMERS.forEach(function(c){vis[c.id]=visible2(c.id)}); n=S.m2.devs.length;
+      var t=binTargets(n), c=binCounts(), ob=outOfBalance();
+      statsHtml = stat('in stock',n) + stat('in bins X / D / M / R',c.X+' / '+c.D+' / '+c.M+' / '+c.R) +
+        stat('target X / D / M / R',t.X+' / '+t.D+' / '+t.M+' / '+t.R) + stat('devices out of place',ob,ob>0) + stat('moves so far',S.m2.moves);
+      S.m2.devs.forEach(function(d){devHtml+='<i class="b'+d.bin+'" title="'+({X:'MNO A reserve bin',D:'Direct bin',M:'MNO bin',R:'Retail bin'})[d.bin]+(d.ret?', returned by Retail B':'')+'">'+(d.ret?'R':'')+'</i>';});
+      keyHtml='<span><i class="bX" style="background:var(--res-soft);border:1.5px dashed var(--res)"></i>MNO A reserve bin</span><span><i style="background:var(--direct-soft);border-color:var(--direct)"></i>Direct bin</span><span><i style="background:var(--mno-soft);border-color:var(--mno)"></i>MNO bin</span><span><i style="background:var(--retail-soft);border-color:var(--retail)"></i>Retail bin</span><span><b style="color:var(--bad)">R</b> returned by Retail B</span>';
+      note = (ob>0 ? 'Bins no longer match the target. <button class="btn solid" id="btnReb">Rebalance: move '+ob+' device'+(ob>1?'s':'')+'</button> ' : 'Bins match the target. ') +
+        'Returned devices that land in the Retail bin are lost for Retail B, but other channels cannot see them either.';
+    }
+    var today=todayView(n), rows='';
+    CUSTOMERS.forEach(function(c){
+      rows+='<tr><td><div class="who"><span><span class="dot" style="background:'+c.color+'"></span>'+c.name+'</span>'+(c.sub?'<small>'+c.sub+'</small>':'')+'</div></td>'+
+        '<td class="num now">'+today[c.id]+'</td><td class="num">'+vis[c.id]+'</td>'+
+        '<td><button class="btn" data-sell="'+c.id+'"'+(vis[c.id]>0?'':' disabled')+' aria-label="Sell 1 to '+c.name+'">Sell 1</button></td></tr>';
+    });
+    $('stats').innerHTML=statsHtml; $('dev').innerHTML=devHtml||'<span class="hint">Out of stock</span>'; $('dkey').innerHTML=keyHtml;
+    $('cus').innerHTML=rows; $('note').innerHTML=note;
+    $('log').innerHTML=S.log.map(function(l){return '<li>'+l+'</li>'}).join('');
+    var reb=$('btnReb'); if(reb) reb.onclick=function(){var m=placeBins(false); S.m2.moves+=m; addLog('Warehouse moved '+m+' device'+(m>1?'s':'')+' between bins.'); render();};
+  }
+
+  /* ---------- wiring ---------- */
+  $('cus').addEventListener('click',function(e){
+    var b=e.target.closest('[data-sell]'); if(!b) return;
+    if(S.method==='1') sell1(b.dataset.sell); else sell2(b.dataset.sell);
+    render();
+  });
+  $('inPool').addEventListener('input',function(){S.pool=+this.value; reset(); render();});
+  $('inCat').addEventListener('change',function(){S.cat=this.value; addLog('Category set to '+this.options[this.selectedIndex].text+'.'); render();});
+  $('inRes').addEventListener('input',function(){S.res=+this.value; S.m1.resLeft=S.res; S.m2.resLeft=S.res; render();});
+  $('inRet').addEventListener('input',function(){S.ret=+this.value; var n=S.m2.devs.length; S.m2.devs.forEach(function(d,i){d.ret= i>=n-Math.min(S.ret,n)}); render();});
+  function seg(a,b,key,va,vb,msg){
+    $(a).onclick=function(){S[key]=va;$(a).setAttribute('aria-pressed','true');$(b).setAttribute('aria-pressed','false');if(msg)addLog(msg(va));render();};
+    $(b).onclick=function(){S[key]=vb;$(b).setAttribute('aria-pressed','true');$(a).setAttribute('aria-pressed','false');if(msg)addLog(msg(vb));render();};
+  }
+  seg('pNorm','pBF','period','norm','bf',function(v){return v==='bf'?'Black Friday period started: Shared 70 / 10 / 20.':'Back to the normal period: Shared 50 / 20 / 30.'});
+  seg('rRep','rOne','resType','rep','one');
+  $('btnReset').onclick=function(){reset();render();};
+
+  function show(v,focus){
+    grid.setAttribute('data-v',v); S.method=v;
+    tabs.forEach(function(t){var on=t.dataset.v===v;t.setAttribute('aria-selected',on);t.tabIndex=on?0:-1;if(on&&focus)t.focus();});
+    render();
+  }
+  tabs.forEach(function(t,i){
+    t.addEventListener('click',function(){show(t.dataset.v)});
+    t.addEventListener('keydown',function(e){
+      var d=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0; if(!d)return;
+      e.preventDefault(); show(tabs[(i+d+tabs.length)%tabs.length].dataset.v,true);
+    });
+  });
+
+  reset(); render();
+})();
+</script>
+
+</body></html>
